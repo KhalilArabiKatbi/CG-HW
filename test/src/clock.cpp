@@ -6,6 +6,8 @@
 #include <time.h>
 #include <sys/timeb.h>
 #include <string.h>
+#include <SOIL/SOIL.h>
+#include <iostream>
 
 // Constants
 #define HOUR_HAND_LENGTH 50.0
@@ -13,18 +15,56 @@
 #define SECOND_HAND_LENGTH 75.0
 #define CLOCK_RADIUS 80.0
 #define PI 3.14159265358979323846
+#define GL_CLAMP_TO_EDGE 0x812F
+#define TEX_SIZE 1000.0f
 
+GLfloat skyboxVertices[] = {
+    -1.0f,  1.0f, -1.0f,
+     1.0f,  1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+
+    -1.0f, -1.0f,  1.0f,
+     1.0f, -1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+
+    -1.0f,  1.0f, -1.0f,
+    -1.0f, -1.0f, -1.0f,
+    -1.0f, -1.0f,  1.0f,
+    -1.0f,  1.0f,  1.0f,
+
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f, -1.0f,
+
+    -1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f, -1.0f,
+     1.0f, -1.0f,  1.0f,
+    -1.0f, -1.0f,  1.0f,
+
+    -1.0f,  1.0f, -1.0f,
+    -1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f,  1.0f,
+     1.0f,  1.0f, -1.0f
+};
+
+// Texture IDs for skybox
+GLuint textureID[6];
 // Global variables
 double secondAngle = 0, minuteAngle = 0, hourAngle = 0;
-float rotateX = 20.0f;
-float rotateY = 20.0f;
+float rotateX = 0.0f;
+float rotateY = 0.0f;
 
 // Camera variables
 float cameraX = 0.0f;
 float cameraY = 0.0f;
-float cameraZ = 200.0f;
+float cameraZ = 500.0f;
 
 // Function prototypes
+void loadSkyboxTextures();
+void drawSkybox();
 void drawCylinder(float radius, float height, int slices);
 void drawClockFace(float radius);
 void drawHand(float length, float angle, float z);
@@ -32,18 +72,122 @@ void reshape(int w, int h);
 void keyboard(unsigned char key, int x, int y);
 void specialKeys(int key, int x, int y);
 
-// Initialize OpenGL settings
 void init(void) {
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
 
-    GLfloat light_position[] = { 1.0, 1.0, 1.0, 0.0 };
-    glLightfv(GL_LIGHT0, GL_POSITION, light_position);
+    GLfloat light_position[] = {
+        .5,.5,.5 , .5
+    };
 
-    glClearColor(0.0, 0.0, 0.0, 0.0);
-    glShadeModel(GL_SMOOTH);
+    glLightfv(GL_LIGHT2, GL_POSITION, light_position);
+
+    glClearColor(.5, .5, .5, .5);
+
+    loadSkyboxTextures(); 
 }
+void loadSkyboxTextures() {
+    const char* faces[6] = {
+     "C:\\Users\\TECH SHOP\\Documents\\Uni\\CG\\test\\test\\skybox\\right.png",
+     "C:\\Users\\TECH SHOP\\Documents\\Uni\\CG\\test\\test\\skybox\\left.png",
+     "C:\\Users\\TECH SHOP\\Documents\\Uni\\CG\\test\\test\\skybox\\bottom.png",
+     "C:\\Users\\TECH SHOP\\Documents\\Uni\\CG\\test\\test\\skybox\\top.png",
+     "C:\\Users\\TECH SHOP\\Documents\\Uni\\CG\\test\\test\\skybox\\front.png",
+     "C:\\Users\\TECH SHOP\\Documents\\Uni\\CG\\test\\test\\skybox\\back.png"
+    };
+    glGenTextures(6, textureID);
+    for (int i = 0; i < sizeof(faces) / sizeof(faces[0]); i++) {
+        glBindTexture(GL_TEXTURE_2D, textureID[i]); 
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+        int width, height;
+        unsigned char* image = SOIL_load_image(faces[i], &width, &height, 0, SOIL_LOAD_RGB);
+        if (image) {
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, image);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            SOIL_free_image_data(image);
+            std::cout << "Texture loaded: " << faces[i] << std::endl;
+        }
+        else {
+            std::cout << "Failed to load texture: " << faces[i] << std::endl;
+            std::cout << "SOIL error: " << SOIL_last_result() << std::endl;
+        }
+
+    }
+    
+}
+
+void drawSkybox() {
+    glEnable(GL_TEXTURE_2D);
+    glPushMatrix();
+    glTranslatef(cameraX, cameraY, cameraZ);
+    glDisable(GL_DEPTH_TEST); // Disable depth testing for skybox
+
+    // Front
+    glBindTexture(GL_TEXTURE_2D, textureID[4]);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex3f(-TEX_SIZE, -TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(1.0, 0.0); glVertex3f(TEX_SIZE, -TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(1.0, 1.0); glVertex3f(TEX_SIZE, TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(0.0, 1.0); glVertex3f(-TEX_SIZE, TEX_SIZE, -TEX_SIZE);
+    glEnd();
+
+    // Back
+    glBindTexture(GL_TEXTURE_2D, textureID[5]);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex3f(TEX_SIZE, -TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(1.0, 0.0); glVertex3f(-TEX_SIZE, -TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(1.0, 1.0); glVertex3f(-TEX_SIZE, TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(0.0, 1.0); glVertex3f(TEX_SIZE, TEX_SIZE, TEX_SIZE);
+    glEnd();
+
+    // Left
+    glBindTexture(GL_TEXTURE_2D, textureID[1]);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex3f(-TEX_SIZE, -TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(1.0, 0.0); glVertex3f(-TEX_SIZE, -TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(1.0, 1.0); glVertex3f(-TEX_SIZE, TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(0.0, 1.0); glVertex3f(-TEX_SIZE, TEX_SIZE, TEX_SIZE);
+    glEnd();
+
+    // Right
+    glBindTexture(GL_TEXTURE_2D, textureID[0]);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex3f(TEX_SIZE, -TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(1.0, 0.0); glVertex3f(TEX_SIZE, -TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(1.0, 1.0); glVertex3f(TEX_SIZE, TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(0.0, 1.0); glVertex3f(TEX_SIZE, TEX_SIZE, -TEX_SIZE);
+    glEnd();
+
+    // Top
+    glBindTexture(GL_TEXTURE_2D, textureID[2]);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex3f(-TEX_SIZE, TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(1.0, 0.0); glVertex3f(TEX_SIZE, TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(1.0, 1.0); glVertex3f(TEX_SIZE, TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(0.0, 1.0); glVertex3f(-TEX_SIZE, TEX_SIZE, TEX_SIZE);
+    glEnd();
+
+    // Bottom
+    glBindTexture(GL_TEXTURE_2D, textureID[3]);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0.0, 0.0); glVertex3f(-TEX_SIZE, -TEX_SIZE, -TEX_SIZE);
+    glTexCoord2f(1.0, 0.0); glVertex3f(-TEX_SIZE, -TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(1.0, 1.0); glVertex3f(TEX_SIZE, -TEX_SIZE, TEX_SIZE);
+    glTexCoord2f(0.0, 1.0); glVertex3f(TEX_SIZE, -TEX_SIZE, -TEX_SIZE);
+    glEnd();
+
+    glEnable(GL_DEPTH_TEST); // Re-enable depth testing
+    glPopMatrix();
+    glDisable(GL_TEXTURE_2D);
+}
+
+
+
+
 
 // Draw the clock face
 void drawClockFace(float radius) {
@@ -55,7 +199,7 @@ void drawClockFace(float radius) {
 
         if (i % 5 == 0) {
             // Hour marks
-            glVertex3f(0.9 * x, 0.9 * y, 10.1);
+            glVertex3f(0.9 * x, 0.9 *    y, 10.1);
             glVertex3f(x, y, 10.1);
         }
         else {
@@ -86,6 +230,8 @@ void drawClock(void) {
 
     glRotatef(rotateX, 1.0f, 0.0f, 0.0f);
     glRotatef(rotateY, 0.0f, 1.0f, 0.0f);
+
+    drawSkybox();
 
     // Draw cylinder
     glColor3f(0.8, 0.2, 0.2);
@@ -162,7 +308,7 @@ void reshape(int w, int h) {
     glViewport(0, 0, w, h);
     glMatrixMode(GL_PROJECTION);
     glLoadIdentity();
-    gluPerspective(45.0, (float)w / h, 1.0, 1000.0);
+    gluPerspective(45.0, (float)w / h, 5.0, 5000.0); // Set near to 5.0 instead of 1.0
     glMatrixMode(GL_MODELVIEW);
 }
 
@@ -201,16 +347,16 @@ void keyboard(unsigned char key, int x, int y) {
 void specialKeys(int key, int x, int y) {
     switch (key) {
     case GLUT_KEY_LEFT:
-        cameraX -= 5.0f;
+        cameraX -= 10.0f;
         break;
     case GLUT_KEY_RIGHT:
-        cameraX += 5.0f;
+        cameraX += 10.0f;
         break;
     case GLUT_KEY_UP:
-        cameraY += 5.0f;
+        cameraY += 10.0f;
         break;
     case GLUT_KEY_DOWN:
-        cameraY -= 5.0f;
+        cameraY -= 10.0f;
         break;
     }
     glutPostRedisplay();
